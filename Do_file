@@ -1,0 +1,122 @@
+*** DO FILE ***
+use "E:\Stata_work\Compensation\Data\Collection\grant_abs_comp.dta", clear
+
+*** DETERMINE THE CSR KEY WORDS FOR Grant_Abs_all
+** Cleaning superfluous "space" within a string
+replace metricother = itrim(metricother)
+** Lower words in metricother
+replace metricother= lower(metricother)
+
+*charlist metricother        
+*"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]`abcdefghijklmnopqrstuvwxyz{|
+
+gen safety = regexm(metricother,"safety")
+gen diversity = regexm(metricother,"diversity")
+gen customer_experience = regexm(metricother,"customer experience")
+gen employee_satisfaction = regexm(metricother,"employee satisfaction")
+gen sig_envi_viol = regexm(metricother,"significant environmental violations")
+gen customer_satisfaction = regexm(metricother,"customer satisfaction")
+gen guest_satisfaction = regexm(metricother,"guest satisfaction")
+gen ethics = regexm(metricother,"ethics")
+gen employee_retention = regexm(metricother,"employee retention")
+gen succession_planning = regexm(metricother,"succession planning")
+gen leadership_engagement = regexm(metricother,"leadership engagement")
+gen employee_engagement = regexm(metricother,"employee engagement")
+gen people = regexm(metricother,"people")
+gen environment = regexm(metricother,"environment")
+gen quality_gone_wrong = regexm(metricother,"quality-things gone wrong")
+gen employee_diversity = regexm(metricother,"employee diversity")
+gen safety_incident_rate = regexm(metricother,"safety incident rate")
+gen client_satisfaction = regexm(metricother,"client satisfaction")
+
+gen corporate_resources = regexm(metricother,"corporate resources")
+gen resources = regexm(metricother,"resources")
+gen resource_management = regexm(metricother,"resource management")
+gen co2_emissions_reduction = regexm(metricother,"co2 emissions reduction")
+gen emissions_reduction = regexm(metricother,"emissions reduction")
+gen emissions = regexm(metricother,"emissions")
+gen environmental_index = regexm(metricother,"environmental index")
+gen environmental_violation = regexm(metricother,"environmental violation")
+gen consideration_of_environmental = regexm(metricother,"consideration of environmental")
+gen green_initiatives = regexm(metricother,"green initiatives")
+gen reduction_envi_viola = regexm(metricother,"reduction in environmental violations")
+gen environmental_reclamation = regexm(metricother,"environmental reclamation")
+gen workforce_other = regexm(metricother,"workforce & other")
+gen workforce = regexm(metricother,"workforce")
+gen workforce_safety = regexm(metricother,"workforce safety")
+gen community_count = regexm(metricother,"community count")
+gen community = regexm(metricother,"community")
+gen community_reputation = regexm(metricother,"community events")
+gen community_index = regexm(metricother,"community index")
+gen product_reliability = regexm(metricother,"product reliability")
+gen corporate_governance = regexm(metricother,"corporate governance")
+gen governance_composite = regexm(metricother,"governance composite")
+gen governance = regexm(metricother,"governance")
+gen compliance = regexm(metricother,"compliance")
+gen corporate_score = regexm(metricother,"corporate score")
+gen for_shareholders = regexm(metricother,"for shareholders")
+gen csr_strategy = regexm(metricother,"csr strategy")
+gen human_rights = regexm(metricother,"human rights")
+
+gen customer = regexm(metricother,"customer")
+gen safety = regexm(metricother,"safety")
+gen satisfaction = regexm(metricother,"satisfaction")
+gen engagement = regexm(metricother,"engagement")
+gen client = regexm(metricother,"client")
+gen initiatives = regexm(metricother,"initiatives")
+gen violation = regexm(metricother,"violation")
+gen social = regexm(metricother,"social")
+gen product = regexm(metricother,"product")
+gen health = regexm(metricother,"health")
+gen injury = regexm(metricother,"injury")
+gen community = regexm(metricother,"community")
+gen sustainability = regexm(metricother,"sustainability")
+gen sustainable = regexm(metricother,"sustainable")
+gen accident = regexm(metricother,"accident")
+
+local csr safety diversity customer_experience employee_satisfaction sig_envi_viol customer_satisfaction guest_satisfaction ethics employee_retention succession_planning leadership_engagement employee_engagement people environment quality_gone_wrong employee_diversity safety_incident_rate client_satisfaction corporate_resources resources resource_management co2_emissions_reduction emissions_reduction emissions environmental_index environmental_violation consideration_of_environmental green_initiatives reduction_envi_viola environmental_reclamation workforce_other workforce workforce_safety community_count community community_reputation community_index product_reliability corporate_governance governance_composite governance compliance corporate_score for_shareholders csr_strategy human_rights customer satisfaction engagement client initiatives violation social product health injury sustainability sustainable accident
+gen csr_metrics = safety
+foreach metric of local csr {
+    replace csr_metrics = `metric' if csr_metrics ==0
+}
+
+*** AGGREGATE DATA AT CIK-YEAR LEVEL - FOLLOW BENNET 2017 AND MENG GAO 2017 ***
+
+duplicates tag cik fyear, gen(dupyear)
+duplicates drop cik fyear goaltarget if dupyear>0, force
+duplicates drop cik fyear, force
+
+drop id
+egen id = group(cik)
+sort id fyear
+
+xtset id fyear
+
+*save "E:\2nd year - Spring\AI TA\Individual\CSR_Abs_checked_AITA.dta", replace
+
+
+*** MERGE MEET/MISS DATA VS CEO POWER DATA ***
+use "E:\Stata_work\Compensation\Data\CEO_power\CEOpower_92_19.dta", clear
+rename year fyear
+merge 1:m gvkey fyear using "E:\2nd year - Spring\AI TA\Individual\CSR_Abs_checked_AITA.dta", force
+
+drop if _merge==1
+drop _merge
+
+gen lev = at/be
+gen size = ln(at)
+gen tenure_sqr = tenure^2
+gen liq = lct/act
+** Deal with two-digit SIC code
+tostring sic, replace
+gen sic2 = substr(sic, 1, 2)
+destring sic2, replace
+
+** Run regression ***
+
+eststo clear
+eststo: reg npm csr_metrics CEO_founder chr tenure tenure_sqr size lev liq i.fyear, vce(robust)
+eststo: reg roa csr_metrics CEO_founder chr tenure tenure_sqr size lev liq i.fyear, vce(robust)
+eststo: reg roe csr_metrics CEO_founder chr tenure tenure_sqr size lev liq i.fyear, vce(robust)
+esttab using ques1.rtf, cells(b(fmt(a3) star) se(par fmt(4)) ) stats(r2 N, fmt(a3)) starlevels(* 0.1 ** 0.05 *** 0.01) replace compress
+
